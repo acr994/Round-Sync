@@ -19,8 +19,9 @@ jobs:
           ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
           GRADLE='build.gradle'
+          GRADLE_PROPERTIES='gradle.properties'
           for file in ${ALL_CHANGED_FILES}; do
-            if [[ "$file" == *"$GRADLE" ]]; then
+            if [[ "$file" == *"$GRADLE" || "$file" == "$GRADLE_PROPERTIES" ]]; then
               echo "$file was changed"
               echo "should-run=true" >> $GITHUB_OUTPUT 
             fi
@@ -33,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Read Go version from project
-        run: echo "GO_VERSION=$(grep -E "^de\.felixnuesse\.extract\.goVersion=" gradle.properties | cut -d'=' -f2)"
+        run: echo "GO_VERSION=$(grep -E "^de\.felixnuesse\.extract\.goVersion=" gradle.properties | cut -d'=' -f2)" >> $GITHUB_ENV
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:

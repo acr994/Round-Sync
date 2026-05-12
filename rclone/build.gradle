@@ -14,7 +14,7 @@
 //  - windows x64
 //
 // Prerequisites:
-//  - go 1.20+
+//  - go 1.25+
 //  - Either Android SDK command-line tools, or the expected NDK version (see gradle.properties).
 
 
