@@ -20,6 +20,8 @@
 
 import groovy.json.JsonSlurper
 
+import java.util.Properties
+
 import java.nio.file.Paths
 
 ext {
@@ -34,6 +36,7 @@ ext {
     CACHE_PATH = Paths.get(PROJECT_DIR, 'cache').toString()
     GOPATH = Paths.get(CACHE_PATH, 'gopath').toString()
     OUTPUT_BASE_PATH = Paths.get(PROJECT_DIR, '..', 'app', 'lib').toAbsolutePath().toString()
+    RCLONE_BUILD_STAMP_PATH = Paths.get(CACHE_PATH, 'build-versions.properties').toString()
 }
 
 def findSdkDir() {
@@ -131,6 +134,33 @@ def getOutputPath(abi) {
     return Paths.get(OUTPUT_BASE_PATH, abi, 'librclone.so').toString()
 }
 
+def getExpectedRcloneBuildStamp() {
+    def expectedStamp = new Properties()
+    expectedStamp.setProperty('rcloneVersion', RCLONE_VERSION)
+    expectedStamp.setProperty('goVersion', GO_REQ_VERSION)
+    expectedStamp.setProperty('ndkVersion', NDK_VERSION)
+    expectedStamp.setProperty('ndkToolchainVersion', NDK_TOOLCHAIN_VERSION)
+    return expectedStamp
+}
+
+def stampMatchesExpected(stampFile, expectedStamp) {
+    if (!stampFile.exists()) {
+        return false
+    }
+
+    def actualStamp = new Properties()
+    stampFile.withInputStream { actualStamp.load(it) }
+    return expectedStamp.every { key, value -> actualStamp.getProperty(key) == value }
+}
+
+def parseGoVersion(String goVersionOutput) {
+    def matcher = goVersionOutput.trim() =~ /^go version go([^\s]+)\s.*$/
+    if (!matcher.matches()) {
+        throw new GradleException("Unable to parse Go version from: ${goVersionOutput.trim()}")
+    }
+    return matcher[0][1]
+}
+
 def buildRclone(abi) {
     def abiToEnv = [
         'armeabi-v7a': ['GOARCH': 'arm', 'GOARM': '7'],
@@ -141,6 +171,7 @@ def buildRclone(abi) {
 
     return {
         doLast {
+            Paths.get(getOutputPath(abi)).parent.toFile().mkdirs()
             exec {
                 environment 'GOPATH', GOPATH
                 def crossCompiler = getCrossCompiler(abi)
@@ -169,7 +200,24 @@ def buildRclone(abi) {
     }
 }
 
-task createRcloneModule(type: Exec) {
+task prepareRcloneBuild {
+    doLast {
+        def expectedStamp = getExpectedRcloneBuildStamp()
+        def stampFile = Paths.get(RCLONE_BUILD_STAMP_PATH).toFile()
+        if (!stampMatchesExpected(stampFile, expectedStamp)) {
+            logger.lifecycle('Rclone build inputs changed; clearing rclone cache and old librclone.so outputs.')
+            delete CACHE_PATH
+            delete fileTree(OUTPUT_BASE_PATH).matching {
+                include '**/librclone.so'
+            }
+        }
+
+        stampFile.parentFile.mkdirs()
+        stampFile.withOutputStream { expectedStamp.store(it, 'Round-Sync rclone build inputs') }
+    }
+}
+
+task createRcloneModule(type: Exec, dependsOn: prepareRcloneBuild) {
     // We create a dummy go module to be able to checkout our specific rclone
     // version later on.
     onlyIf { !Paths.get(CACHE_PATH, 'go.mod').toFile().exists() }
@@ -183,19 +231,23 @@ task checkoutRclone(type: Exec, dependsOn: createRcloneModule) {
     workingDir CACHE_PATH
     environment 'GOPATH', GOPATH
 
-    def goVersionOutput = new ByteArrayOutputStream()
-    exec{
-        commandLine 'go', 'version'
-        standardOutput = goVersionOutput;
-    }
+    doFirst {
+        def goVersionOutput = new ByteArrayOutputStream()
+        exec {
+            commandLine 'go', 'version'
+            standardOutput = goVersionOutput
+        }
 
-    if (goVersionOutput.toString().contains(GO_REQ_VERSION)) {
-        println "You are running the required go version."
-    } else {
-        logger.error("The requred go version is: ${GO_REQ_VERSION}")
-        logger.error( "You are running: ${goVersionOutput}")
+        def actualGoVersion = parseGoVersion(goVersionOutput.toString())
+        if (actualGoVersion != GO_REQ_VERSION) {
+            throw new GradleException(
+                "Wrong Go version for rclone build. Expected ${GO_REQ_VERSION}, "
+                + "but found ${actualGoVersion}. Full output: ${goVersionOutput.toString().trim()}"
+            )
+        }
+        println "You are running the required go version (${actualGoVersion})."
+        println "You are building rclone v${RCLONE_VERSION}"
     }
-    println "You are building rclone v${RCLONE_VERSION}"
 
     commandLine 'go', 'get', '-v', '-d', "${RCLONE_MODULE}@v${RCLONE_VERSION}"
 }
