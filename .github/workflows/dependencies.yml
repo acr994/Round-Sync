@@ -24,9 +24,10 @@ jobs:
         env:
           ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
-          echo "should-run=false" >> "$GITHUB_OUTPUT"
+          GRADLE='build.gradle'
+          GRADLE_PROPERTIES='gradle.properties'
           for file in ${ALL_CHANGED_FILES}; do
-            if [[ "$file" == "build.gradle" || "$file" == "app/build.gradle" || "$file" == "rclone/build.gradle" || "$file" == "gradle.properties" ]]; then
+            if [[ "$file" == *"$GRADLE" || "$file" == "$GRADLE_PROPERTIES" ]]; then
               echo "$file was changed"
               echo "should-run=true" >> "$GITHUB_OUTPUT"
               break
