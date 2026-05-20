@@ -2,6 +2,12 @@ name: "Verify dependency chain"
 on:
   workflow_dispatch:
   push:
+    paths:
+      - 'build.gradle'
+      - 'app/build.gradle'
+      - 'rclone/build.gradle'
+      - 'gradle.properties'
+      - '.github/workflows/dependencies.yml'
 
 jobs:
   dependency-change-verification:
@@ -65,6 +71,7 @@ jobs:
           wget -O apktool "https://raw.githubusercontent.com/iBotPeaches/Apktool/v${apktoolVersion}/scripts/linux/apktool"
           # clone izzy's repo with the scan tools
           git clone https://gitlab.com/IzzyOnDroid/repo.git
+          git -C repo checkout "${izzyRepoRef}"
           # create a directory for Apktool and move the apktool* files there
           mkdir -p repo/lib/radar/tool
           mv apktool* repo/lib/radar/tool
@@ -73,6 +80,8 @@ jobs:
           repo/bin/scanapk.php app/build/outputs/apk/oss/debug/roundsync_v*-oss-universal-debug.apk
         env:
           apktoolVersion: "2.9.3"
+          apktoolSha256: "7956eb04194300ce0d0a84ad18771eebc94b89fb8d1ddcce8ea4c056818646f4"
+          izzyRepoRef: "deddda86f2746bd89fcd5a4a40db54ba6ffd37ec"
       - name: 'Get Commit Hash'
         id: commit
         run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
