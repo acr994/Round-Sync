@@ -2,6 +2,19 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlinx-serialization'
 
+def roundSyncOnlyAbi = providers.gradleProperty('roundsync.onlyAbi').orNull
+
+def roundSyncRcloneTask = [
+        'armeabi-v7a': ':rclone:buildArm',
+        'arm64-v8a'  : ':rclone:buildArm64',
+        'x86'        : ':rclone:buildx86',
+        'x86_64'     : ':rclone:buildx64'
+][roundSyncOnlyAbi]
+
+if (roundSyncOnlyAbi != null && roundSyncRcloneTask == null) {
+    throw new GradleException("Unsupported roundsync.onlyAbi '${roundSyncOnlyAbi}'. Supported values: armeabi-v7a, arm64-v8a, x86, x86_64")
+}
+
 android {
     signingConfigs {
         release {
@@ -78,8 +91,13 @@ android {
         abi {
             enable true
             reset()
-            include 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
-            universalApk true
+            if (roundSyncOnlyAbi != null) {
+                include roundSyncOnlyAbi
+                universalApk false
+            } else {
+                include 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
+                universalApk true
+            }
         }
     }
 
@@ -129,11 +147,12 @@ android {
         baseline = file("lint-baseline.xml")
         abortOnError = true
         warning 'MissingTranslation'
+        warning 'MissingQuantity'
 
     }
 
     gradle.projectsEvaluated {
-        preBuild.dependsOn(':rclone:buildAll')
+        preBuild.dependsOn(roundSyncRcloneTask ?: ':rclone:buildAll')
     }
 
     namespace 'ca.pkay.rcloneexplorer'
