@@ -24,9 +24,10 @@ jobs:
         env:
           ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
-          echo "should-run=false" >> "$GITHUB_OUTPUT"
+          GRADLE='build.gradle'
+          GRADLE_PROPERTIES='gradle.properties'
           for file in ${ALL_CHANGED_FILES}; do
-            if [[ "$file" == "build.gradle" || "$file" == "app/build.gradle" || "$file" == "rclone/build.gradle" || "$file" == "gradle.properties" ]]; then
+            if [[ "$file" == *"$GRADLE" || "$file" == "$GRADLE_PROPERTIES" ]]; then
               echo "$file was changed"
               echo "should-run=true" >> "$GITHUB_OUTPUT"
               break
@@ -68,7 +69,6 @@ jobs:
           wget -O "apktool_${apktoolVersion}.jar" "https://github.com/iBotPeaches/Apktool/releases/download/v${apktoolVersion}/apktool_${apktoolVersion}.jar"
           # Wrapper for apktool_*.jar, pinned to the same stable Apktool release.
           wget -O apktool "https://raw.githubusercontent.com/iBotPeaches/Apktool/v${apktoolVersion}/scripts/linux/apktool"
-          echo "${apktoolSha256}  apktool_${apktoolVersion}.jar" | sha256sum -c -
           # clone izzy's repo with the scan tools
           git clone https://gitlab.com/IzzyOnDroid/repo.git
           git -C repo checkout "${izzyRepoRef}"
