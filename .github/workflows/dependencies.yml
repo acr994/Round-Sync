@@ -13,17 +13,17 @@ jobs:
       - name: Get changed files
         id: changed-files
         uses: tj-actions/changed-files@v47
-      - name: Verify build.gradle changed
+      - name: Verify build files changed
         id: changeDetection
         env:
           ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
-          GRADLE='build.gradle'
-          GRADLE_PROPERTIES='gradle.properties'
+          echo "should-run=false" >> "$GITHUB_OUTPUT"
           for file in ${ALL_CHANGED_FILES}; do
-            if [[ "$file" == *"$GRADLE" || "$file" == "$GRADLE_PROPERTIES" ]]; then
+            if [[ "$file" == "build.gradle" || "$file" == "app/build.gradle" || "$file" == "rclone/build.gradle" || "$file" == "gradle.properties" ]]; then
               echo "$file was changed"
-              echo "should-run=true" >> $GITHUB_OUTPUT 
+              echo "should-run=true" >> "$GITHUB_OUTPUT"
+              break
             fi
           done
 
