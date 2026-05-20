@@ -9,20 +9,21 @@ jobs:
     outputs:
       changed: ${{ steps.changeDetection.outputs.should-run }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Get changed files
         id: changed-files
-        uses: tj-actions/changed-files@v44
-      - name: Verify build.gradle changed
+        uses: tj-actions/changed-files@v47
+      - name: Verify build files changed
         id: changeDetection
         env:
           ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
-          GRADLE='build.gradle'
+          echo "should-run=false" >> "$GITHUB_OUTPUT"
           for file in ${ALL_CHANGED_FILES}; do
-            if [[ "$file" == *"$GRADLE" ]]; then
+            if [[ "$file" == "build.gradle" || "$file" == "app/build.gradle" || "$file" == "rclone/build.gradle" || "$file" == "gradle.properties" ]]; then
               echo "$file was changed"
-              echo "should-run=true" >> $GITHUB_OUTPUT 
+              echo "should-run=true" >> "$GITHUB_OUTPUT"
+              break
             fi
           done
 
@@ -31,22 +32,23 @@ jobs:
     needs: dependency-change-verification
     if: needs.dependency-change-verification.outputs.changed == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Read Go version from project
-        run: echo "GO_VERSION=$(grep -E "^de\.felixnuesse\.extract\.goVersion=" gradle.properties | cut -d'=' -f2)"
+        run: echo "GO_VERSION=$(grep -E "^de\.felixnuesse\.extract\.goVersion=" gradle.properties | cut -d'=' -f2)" >> $GITHUB_ENV
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: gradle
       - name: Set up Go from gradle.properties
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version: '${{env.GO_VERSION}}'
+          check-latest: true
         id: go
       - name: Setup Android SDK/NDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
       - name: Install NDK from gradle.properties
         run: |
           NDK_VERSION="$(grep -E "^de\.felixnuesse\.extract\.ndkVersion=" gradle.properties | cut -d'=' -f2)"
@@ -57,9 +59,9 @@ jobs:
       - name: 'Check for non-FOSS libraries'
         run: |
           # prepare scanapk with apktool.
-          wget https://github.com/iBotPeaches/Apktool/releases/download/v$apktoolVersion/apktool_$apktoolVersion.jar
-          # Wrapper for apktool_*.jar
-          wget https://github.com/iBotPeaches/Apktool/raw/master/scripts/linux/apktool
+          wget -O "apktool_${apktoolVersion}.jar" "https://github.com/iBotPeaches/Apktool/releases/download/v${apktoolVersion}/apktool_${apktoolVersion}.jar"
+          # Wrapper for apktool_*.jar, pinned to the same stable Apktool release.
+          wget -O apktool "https://raw.githubusercontent.com/iBotPeaches/Apktool/v${apktoolVersion}/scripts/linux/apktool"
           # clone izzy's repo with the scan tools
           git clone https://gitlab.com/IzzyOnDroid/repo.git
           # create a directory for Apktool and move the apktool* files there
@@ -72,4 +74,4 @@ jobs:
           apktoolVersion: "2.9.3"
       - name: 'Get Commit Hash'
         id: commit
-        uses: pr-mpt/actions-commit-hash@v1
+        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
